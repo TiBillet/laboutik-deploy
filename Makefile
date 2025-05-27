@@ -89,14 +89,18 @@ check-python:
 		python3 --version; \
 	else \
 		echo -e "${YELLOW}⚠️ Python is not installed. Installing Python...${NC}"; \
-		sudo apt update && sudo apt install -y python3 python3-pip; \
+		sudo apt update && sudo apt install -y python3 python3-full; \
 	fi
-	@echo -e "\n${YELLOW}📚 Installing required Python libraries...${NC}"
-	@if ! command -v pip3 >/dev/null 2>&1; then \
-		echo -e "${YELLOW}⚠️ pip3 is not installed. Installing pip3...${NC}"; \
-		sudo apt update && sudo apt install -y python3-pip; \
+
+	@echo -e "\n${YELLOW}📚 Setting up virtual environment for Python libraries...${NC}"
+	@if [ ! -d "venv" ]; then \
+		echo -e "${YELLOW}🔧 Creating virtual environment...${NC}"; \
+		python3 -m venv venv; \
 	fi
-	@pip3 install --user cryptography django
+
+	@echo -e "${YELLOW}🔌 Activating virtual environment and installing packages...${NC}"
+	@. venv/bin/activate && pip install cryptography django && deactivate
+	@echo -e "${GREEN}✅ Python libraries installed in virtual environment${NC}"
 
 	@echo -e "\n${YELLOW}🔍 Checking for required system tools...${NC}"
 	@if ! command -v host >/dev/null 2>&1; then \
@@ -127,19 +131,25 @@ setup-env:
 	@cp .env.template .env
 
 	@echo -e "\n${YELLOW}🔐 Generating secure keys...${NC}"
-	@django_secret=$$(python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())") && \
+	@if [ ! -d "venv" ]; then \
+		echo -e "${YELLOW}⚠️ Virtual environment not found. Running check-python first...${NC}"; \
+		$(MAKE) check-python; \
+	fi
+
+	@echo -e "${YELLOW}🔑 Using virtual environment to generate keys...${NC}"
+	@django_secret=$$(. venv/bin/activate && python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())" && deactivate) && \
 	sed -i "s|DJANGO_SECRET=''|DJANGO_SECRET='$$django_secret'|g" .env && \
 	echo -e "${GREEN}✅ Generated DJANGO_SECRET key${NC}"
 
-	@fernet_key=$$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))") && \
+	@fernet_key=$$(. venv/bin/activate && python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))" && deactivate) && \
 	sed -i "s|FERNET_KEY=''|FERNET_KEY='$$fernet_key'|g" .env && \
 	echo -e "${GREEN}✅ Generated FERNET_KEY${NC}"
 
-	@postgres_password=$$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))") && \
+	@postgres_password=$$(. venv/bin/activate && python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))" && deactivate) && \
 	sed -i "s|POSTGRES_PASSWORD=''|POSTGRES_PASSWORD='$$postgres_password'|g" .env && \
 	echo -e "${GREEN}✅ Generated POSTGRES_PASSWORD${NC}"
 
-	@borg_passphrase=$$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))") && \
+	@borg_passphrase=$$(. venv/bin/activate && python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))" && deactivate) && \
 	sed -i "s|BORG_PASSPHRASE=''|BORG_PASSPHRASE='$$borg_passphrase'|g" .env && \
 	echo -e "${GREEN}✅ Generated BORG_PASSPHRASE${NC}"
 
