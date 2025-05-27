@@ -1,0 +1,277 @@
+################################################
+# Makefile pour LaBoutik - Système de Cashless TiBillet
+################################################
+#
+# Ce Makefile permet l'installation et la configuration d'une instance LaBoutik
+# sur un serveur VPS en production. Il automatise les tâches suivantes :
+#
+# - Installation des dépendances système (Docker, CrowdSec)
+# - Vérification et installation de Python et des bibliothèques requises
+# - Création des répertoires nécessaires
+# - Configuration du fichier .env avec génération de clés sécurisées
+# - Vérification de la connexion avec LesPass
+# - Déploiement de l'application via Docker Compose
+#
+# Pour utiliser ce Makefile, exécutez simplement la commande 'make' suivie
+# du nom de la cible souhaitée. Par exemple : 'make install-vps'
+#
+# Pour voir la liste complète des commandes disponibles : 'make help'
+#
+################################################
+
+# Variables
+SHELL := /bin/bash
+
+# Couleurs pour les messages
+GREEN := \033[0;32m
+RED := \033[0;31m
+YELLOW := \033[0;33m
+NC := \033[0m # No Color
+
+# Default target
+.PHONY: help
+help:
+	@echo -e "\n${GREEN}📋 Available targets:${NC}"
+	@echo -e "  ${GREEN}install${NC}       - 🚀 Set up a production VPS with required dependencies"
+	@echo -e "  ${GREEN}install-docker${NC}    - 🐳 Install Docker"
+	@echo -e "  ${GREEN}install-crowdsec${NC}  - 🛡️  Install CrowdSec"
+	@echo -e "  ${GREEN}check-python${NC}      - 🐍 Check Python installation and install required libraries"
+	@echo -e "  ${GREEN}setup-dirs${NC}        - 📁 Create required directories"
+	@echo -e "  ${GREEN}setup-env${NC}         - ⚙️  Create and configure .env file"
+# 	@echo -e "  ${GREEN}setup${NC}             - 🔧 Complete setup (directories and .env)"
+	@echo -e "  ${GREEN}verify-lespass${NC}    - 🔄 Verify connection with LesPass"
+# 	@echo -e "  ${GREEN}deploy${NC}            - 🚢 Deploy the application using Docker Compose"
+# 	@echo -e "  ${GREEN}dev${NC}               - 💻 Start development environment"
+# 	@echo -e "  ${GREEN}logs${NC}              - 📊 View logs from all services"
+# 	@echo -e "  ${GREEN}backup${NC}            - 💾 Run backup"
+# 	@echo -e "  ${GREEN}clean${NC}             - 🧹 Clean up Docker resources"
+
+# VPS setup
+.PHONY: install
+install-vps: update-upgrade install-docker install-crowdsec setup-dirs check-python setup-env verify-lespass
+	@echo -e "\n${GREEN}🎉 VPS setup completed successfully!${NC}"
+
+# VPS update and upgrade
+.PHONY: update-upgrade
+update-upgrade:
+	@echo -e "\n${YELLOW}🔄 Starting VPS update && upgrade...${NC}"
+	sudo apt update && sudo apt upgrade -y
+	sudo apt install git byobu curl
+	@echo -e "${GREEN}✅ VPS update && upgrade completed successfully!${NC}"
+
+
+# Docker installation
+.PHONY: install-docker
+install-docker:
+	@echo -e "\n${YELLOW}🐳 Installing Docker...${NC}"
+	curl -fsSL https://get.docker.com -o get-docker.sh
+	sudo sh get-docker.sh
+	sudo usermod -aG docker $(USER)
+	rm get-docker.sh
+	sudo docker network create frontend
+	@echo -e "${GREEN}✅ Docker installation completed successfully!${NC}"
+
+# CrowdSec installation
+.PHONY: install-crowdsec
+install-crowdsec:
+	@echo -e "\n${YELLOW}🛡️ Installing CrowdSec...${NC}"
+	curl -s https://install.crowdsec.net | sudo sh
+	sudo apt install -y crowdsec
+	sudo apt install -y crowdsec-firewall-bouncer-iptables
+	@echo -e "${GREEN}✅ CrowdSec installation completed successfully!${NC}"
+
+# Check Python installation and install required libraries
+.PHONY: check-python
+check-python:
+	@echo -e "\n${YELLOW}🐍 Checking Python installation...${NC}"
+	@if command -v python3 >/dev/null 2>&1; then \
+		echo -e "${GREEN}✅ Python is installed:${NC}"; \
+		python3 --version; \
+	else \
+		echo -e "${YELLOW}⚠️ Python is not installed. Installing Python...${NC}"; \
+		sudo apt update && sudo apt install -y python3 python3-pip; \
+	fi
+	@echo -e "\n${YELLOW}📚 Installing required Python libraries...${NC}"
+	@pip3 install --user cryptography django
+
+	@echo -e "\n${YELLOW}🔍 Checking for required system tools...${NC}"
+	@if ! command -v host >/dev/null 2>&1; then \
+		echo -e "${YELLOW}⚙️ Installing dnsutils for host command...${NC}"; \
+		sudo apt update && sudo apt install -y dnsutils; \
+	fi
+	@if ! command -v curl >/dev/null 2>&1; then \
+		echo -e "${YELLOW}⚙️ Installing curl...${NC}"; \
+		sudo apt update && sudo apt install -y curl; \
+	fi
+	@echo -e "${GREEN}✅ Python libraries and system tools installed successfully!${NC}"
+
+# Create required directories
+.PHONY: setup-dirs
+setup-dirs:
+	@echo -e "\n${YELLOW}📁 Creating required directories...${NC}"
+	mkdir -p logs www backup database nginx ssh
+	@echo -e "${GREEN}✅ Directories created successfully!${NC}"
+
+# Create and configure .env file
+.PHONY: setup-env
+setup-env:
+	@echo -e "\n${YELLOW}📝 Creating .env file...${NC}"
+	@if [ -f .env ]; then \
+		echo -e "${YELLOW}⚠️ .env file already exists. Backing up to .env.bak${NC}"; \
+		cp .env .env.bak; \
+	fi
+	@cp .env.template .env
+
+	@echo -e "\n${YELLOW}🔐 Generating secure keys...${NC}"
+	@django_secret=$$(python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())") && \
+	sed -i "s|DJANGO_SECRET=''|DJANGO_SECRET='$$django_secret'|g" .env && \
+	echo -e "${GREEN}✅ Generated DJANGO_SECRET key${NC}"
+
+	@fernet_key=$$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))") && \
+	sed -i "s|FERNET_KEY=''|FERNET_KEY='$$fernet_key'|g" .env && \
+	echo -e "${GREEN}✅ Generated FERNET_KEY${NC}"
+
+	@postgres_password=$$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))") && \
+	sed -i "s|POSTGRES_PASSWORD=''|POSTGRES_PASSWORD='$$postgres_password'|g" .env && \
+	echo -e "${GREEN}✅ Generated POSTGRES_PASSWORD${NC}"
+
+	@borg_passphrase=$$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))") && \
+	sed -i "s|BORG_PASSPHRASE=''|BORG_PASSPHRASE='$$borg_passphrase'|g" .env && \
+	echo -e "${GREEN}✅ Generated BORG_PASSPHRASE${NC}"
+
+	@echo -e "\n${YELLOW}👤 Please enter values for the following variables:${NC}"
+	@while true; do \
+		read -p "🌐 DOMAIN (e.g., cashless.tibillet.localhost, without https:// and without trailing /): " domain; \
+		if [[ "$$domain" == *"https://"* ]]; then \
+			echo -e "${RED}❌ Error: Domain should not contain https://. Please enter only the domain name.${NC}"; \
+		elif [[ "$$domain" == */ ]]; then \
+			echo -e "${RED}❌ Error: Domain should not end with /. Please enter only the domain name.${NC}"; \
+		else \
+			# Verify domain resolves to an IP address \
+			echo -e "${YELLOW}🔍 Verifying domain $$domain...${NC}"; \
+			if ! host "$$domain" > /dev/null 2>&1; then \
+				echo -e "${YELLOW}⚠️ Warning: Domain $$domain could not be resolved. This might be normal for local development.${NC}"; \
+				read -p "Continue anyway? (y/n): " continue_anyway; \
+				if [[ "$$continue_anyway" != "y" ]]; then \
+					continue; \
+				fi; \
+			else \
+				echo -e "${GREEN}✅ Domain $$domain resolves successfully.${NC}"; \
+				# Get IP information \
+				ip_info=$$(curl -s ipinfo.io); \
+				echo -e "${YELLOW}🌍 Your IP information:${NC}"; \
+				echo "$$ip_info"; \
+			fi; \
+			sed -i "s|DOMAIN=''|DOMAIN='$$domain'|g" .env; \
+			echo -e "${GREEN}✅ Domain set successfully!${NC}"; \
+			break; \
+		fi; \
+	done
+
+	@while true; do \
+		read -p "📧 ADMIN_EMAIL: " admin_email; \
+		if [[ ! "$$admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$$ ]]; then \
+			echo -e "${RED}❌ Error: Invalid email format. Please enter a valid email address.${NC}"; \
+		else \
+			sed -i "s|ADMIN_EMAIL=''|ADMIN_EMAIL='$$admin_email'|g" .env; \
+			echo -e "${GREEN}✅ Admin email set successfully!${NC}"; \
+			break; \
+		fi; \
+	done
+
+	@while true; do \
+		read -p "🔗 FEDOW_URL (must start with https:// and end with /): " fedow_url; \
+		if [[ ! "$$fedow_url" == https://* ]]; then \
+			echo -e "${RED}❌ Error: FEDOW_URL must start with https://${NC}"; \
+		elif [[ ! "$$fedow_url" == */ ]]; then \
+			echo -e "${RED}❌ Error: FEDOW_URL must end with /${NC}"; \
+		else \
+			# Verify URL is accessible \
+			echo -e "${YELLOW}🔍 Verifying FEDOW_URL $$fedow_url...${NC}"; \
+			status_code=$$(curl -s -o /dev/null -w "%{http_code}" --insecure "$$fedow_url"); \
+			if [[ "$$status_code" == "200" ]]; then \
+				echo -e "${GREEN}✅ FEDOW_URL is accessible (HTTP 200 OK)${NC}"; \
+				sed -i "s|FEDOW_URL=''|FEDOW_URL='$$fedow_url'|g" .env; \
+				echo -e "${GREEN}✅ FEDOW_URL set successfully!${NC}"; \
+				break; \
+			else \
+				echo -e "${YELLOW}⚠️ Warning: FEDOW_URL returned HTTP status $$status_code${NC}"; \
+				read -p "Continue anyway? (y/n): " continue_anyway; \
+				if [[ "$$continue_anyway" == "y" ]]; then \
+					sed -i "s|FEDOW_URL=''|FEDOW_URL='$$fedow_url'|g" .env; \
+					echo -e "${YELLOW}⚠️ FEDOW_URL set despite connection issues${NC}"; \
+					break; \
+				fi; \
+			fi; \
+		fi; \
+	done
+
+	@while true; do \
+		read -p "🎫 LESPASS_TENANT_URL (must start with https:// and end with /): " lespass_url; \
+		if [[ ! "$$lespass_url" == https://* ]]; then \
+			echo -e "${RED}❌ Error: LESPASS_TENANT_URL must start with https://${NC}"; \
+		elif [[ ! "$$lespass_url" == */ ]]; then \
+			echo -e "${RED}❌ Error: LESPASS_TENANT_URL must end with /${NC}"; \
+		else \
+			# Verify URL is accessible \
+			echo -e "${YELLOW}🔍 Verifying LESPASS_TENANT_URL $$lespass_url...${NC}"; \
+			status_code=$$(curl -s -o /dev/null -w "%{http_code}" --insecure "$$lespass_url"); \
+			if [[ "$$status_code" == "200" ]]; then \
+				echo -e "${GREEN}✅ LESPASS_TENANT_URL is accessible (HTTP 200 OK)${NC}"; \
+				sed -i "s|LESPASS_TENANT_URL=''|LESPASS_TENANT_URL='$$lespass_url'|g" .env; \
+				echo -e "${GREEN}✅ LESPASS_TENANT_URL set successfully!${NC}"; \
+				break; \
+			else \
+				echo -e "${YELLOW}⚠️ Warning: LESPASS_TENANT_URL returned HTTP status $$status_code${NC}"; \
+				read -p "Continue anyway? (y/n): " continue_anyway; \
+				if [[ "$$continue_anyway" == "y" ]]; then \
+					sed -i "s|LESPASS_TENANT_URL=''|LESPASS_TENANT_URL='$$lespass_url'|g" .env; \
+					echo -e "${YELLOW}⚠️ LESPASS_TENANT_URL set despite connection issues${NC}"; \
+					break; \
+				fi; \
+			fi; \
+		fi; \
+	done
+
+	@read -p "💰 MAIN_ASSET_NAME (e.g., TestCoin, FestivalCoin): " asset_name && \
+	sed -i "s|MAIN_ASSET_NAME=''|MAIN_ASSET_NAME='$$asset_name'|g" .env && \
+	echo -e "${GREEN}✅ MAIN_ASSET_NAME set successfully!${NC}"
+
+	@echo -e "\n${GREEN}🎉 .env file created and configured with your values!${NC}"
+
+
+# Verify LesPass connection
+.PHONY: verify-lespass
+verify-lespass:
+	@echo -e "\n${YELLOW}🔄 Verifying connection with LesPass...${NC}"
+	@if [ ! -f .env ]; then \
+		echo -e "${RED}❌ Error: .env file not found. Please run 'make setup-env' first.${NC}"; \
+		exit 1; \
+	fi
+	@source .env && \
+	echo -e "${YELLOW}🔌 Connecting to LesPass at $$LESPASS_TENANT_URL...${NC}" && \
+	max_attempts=10; \
+	attempt=1; \
+	success=false; \
+	while [ $$attempt -le $$max_attempts ] && [ "$$success" = "false" ]; do \
+		echo -e "${YELLOW}⏳ Attempt $$attempt of $$max_attempts...${NC}"; \
+		response=$$(curl -s -X POST \
+			-d "email=$$ADMIN_EMAIL" \
+			-H "Content-Type: application/x-www-form-urlencoded" \
+			--insecure \
+			"$$LESPASS_TENANT_URL"api/get_user_pub_pem/); \
+		if [ $$? -eq 0 ] && [ -n "$$response" ]; then \
+			echo "$$response"; \
+			echo -e "\n${GREEN}✅ LesPass connection verified successfully!${NC}"; \
+			success=true; \
+		else \
+			echo -e "${YELLOW}⚠️ Connection failed. Retrying in 1 second...${NC}"; \
+			sleep 1; \
+			attempt=$$((attempt + 1)); \
+		fi; \
+	done; \
+	if [ "$$success" = "false" ]; then \
+		echo -e "${RED}❌ Failed to connect to LesPass after $$max_attempts attempts.${NC}"; \
+		exit 1; \
+	fi
+
