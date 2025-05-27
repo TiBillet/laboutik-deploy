@@ -92,6 +92,10 @@ check-python:
 		sudo apt update && sudo apt install -y python3 python3-pip; \
 	fi
 	@echo -e "\n${YELLOW}📚 Installing required Python libraries...${NC}"
+	@if ! command -v pip3 >/dev/null 2>&1; then \
+		echo -e "${YELLOW}⚠️ pip3 is not installed. Installing pip3...${NC}"; \
+		sudo apt update && sudo apt install -y python3-pip; \
+	fi
 	@pip3 install --user cryptography django
 
 	@echo -e "\n${YELLOW}🔍 Checking for required system tools...${NC}"
@@ -274,4 +278,3 @@ verify-lespass:
 		echo -e "${RED}❌ Failed to connect to LesPass after $$max_attempts attempts.${NC}"; \
 		exit 1; \
 	fi
-
