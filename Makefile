@@ -48,7 +48,7 @@ help:
 
 # VPS setup
 .PHONY: install
-install-vps: update-upgrade install-docker install-crowdsec setup-dirs check-python setup-env verify-lespass
+install: update-upgrade install-docker install-crowdsec setup-dirs check-python setup-env verify-lespass
 	@echo -e "\n${GREEN}🎉 VPS setup completed successfully!${NC}"
 
 # VPS update and upgrade
