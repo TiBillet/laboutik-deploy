@@ -6,6 +6,7 @@
 # sur un serveur VPS en production. Il automatise les tâches suivantes :
 #
 # - Installation des dépendances système (Docker, CrowdSec)
+# - Configuration de l'espace swap (4GB) pour améliorer les performances
 # - Vérification et installation de Python et des bibliothèques requises
 # - Création des répertoires nécessaires
 # - Configuration du fichier .env avec génération de clés sécurisées
@@ -35,11 +36,13 @@ help:
 	@echo -e "  ${GREEN}install${NC}       - 🚀 Set up a production VPS with required dependencies"
 	@echo -e "  ${GREEN}install-docker${NC}    - 🐳 Install Docker"
 	@echo -e "  ${GREEN}install-crowdsec${NC}  - 🛡️  Install CrowdSec"
+	@echo -e "  ${GREEN}check-swap${NC}        - 💾 Check and configure swap space"
 	@echo -e "  ${GREEN}check-python${NC}      - 🐍 Check Python installation and install required libraries"
 	@echo -e "  ${GREEN}setup-dirs${NC}        - 📁 Create required directories"
 	@echo -e "  ${GREEN}setup-env${NC}         - ⚙️  Create and configure .env file"
 # 	@echo -e "  ${GREEN}setup${NC}             - 🔧 Complete setup (directories and .env)"
 	@echo -e "  ${GREEN}verify-lespass${NC}    - 🔄 Verify connection with LesPass"
+	@echo -e "  ${GREEN}check-traefik${NC}     - 🔍 Verify Traefik container is running"
 # 	@echo -e "  ${GREEN}deploy${NC}            - 🚢 Deploy the application using Docker Compose"
 # 	@echo -e "  ${GREEN}dev${NC}               - 💻 Start development environment"
 # 	@echo -e "  ${GREEN}logs${NC}              - 📊 View logs from all services"
@@ -48,7 +51,7 @@ help:
 
 # VPS setup
 .PHONY: install
-install: update-upgrade install-docker install-crowdsec setup-dirs check-python setup-env verify-lespass
+install: update-upgrade install-docker install-crowdsec check-swap setup-dirs check-python setup-env verify-lespass check-traefik
 	@echo -e "\n${GREEN}🎉 VPS setup completed successfully!${NC}"
 
 # VPS update and upgrade
@@ -106,6 +109,32 @@ install-crowdsec:
 		echo -e "${GREEN}✅ CrowdSec installation completed successfully!${NC}"; \
 	fi
 
+# Check and configure swap space
+.PHONY: check-swap
+check-swap:
+	@echo -e "\n${YELLOW}💾 Checking swap configuration...${NC}"
+	@if swapon --show | grep -q "/swapfile"; then \
+		echo -e "${GREEN}✅ Swap is already configured and active!${NC}"; \
+		swapon --show; \
+	else \
+		echo -e "${YELLOW}🔄 Configuring swap space...${NC}"; \
+		echo -e "${YELLOW}📝 Creating 4GB swap file...${NC}"; \
+		sudo fallocate -l 4G /swapfile; \
+		echo -e "${YELLOW}🔒 Securing swap file...${NC}"; \
+		sudo chmod 600 /swapfile; \
+		echo -e "${YELLOW}🔧 Formatting swap file...${NC}"; \
+		sudo mkswap /swapfile; \
+		echo -e "${YELLOW}🔌 Activating swap...${NC}"; \
+		sudo swapon /swapfile; \
+		echo -e "${YELLOW}🔍 Verifying swap configuration...${NC}"; \
+		swapon --show; \
+		echo -e "${YELLOW}📋 Adding swap to /etc/fstab for persistence...${NC}"; \
+		if ! grep -q "/swapfile none swap sw 0 0" /etc/fstab; then \
+			echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null; \
+		fi; \
+		echo -e "${GREEN}✅ Swap configuration completed successfully!${NC}"; \
+	fi
+
 # Check Python installation and install required libraries
 .PHONY: check-python
 check-python:
@@ -158,6 +187,7 @@ check-python:
 setup-dirs:
 	@echo -e "\n${YELLOW}📁 Creating required directories...${NC}"
 	mkdir -p logs www backup database nginx ssh
+	cp laboutik.conf nginx
 	@echo -e "${GREEN}✅ Directories created successfully!${NC}"
 
 # Create and configure .env file
@@ -178,19 +208,19 @@ setup-env:
 
 	@echo -e "${YELLOW}🔑 Using virtual environment to generate keys...${NC}"
 	@django_secret=$$(. venv/bin/activate && python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())" && deactivate) && \
-	sed -i "s|DJANGO_SECRET=''|DJANGO_SECRET='$$django_secret'|g" .env && \
+	awk -v secret="$$django_secret" 'BEGIN{FS=OFS="="} $$1=="DJANGO_SECRET"{$$2="'\''" secret "'\''"}1' .env > .env.tmp && mv .env.tmp .env && \
 	echo -e "${GREEN}✅ Generated DJANGO_SECRET key${NC}"
 
 	@fernet_key=$$(. venv/bin/activate && python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))" && deactivate) && \
-	sed -i "s|FERNET_KEY=''|FERNET_KEY='$$fernet_key'|g" .env && \
+	awk -v key="$$fernet_key" 'BEGIN{FS=OFS="="} $$1=="FERNET_KEY"{$$2="'\''" key "'\''"}1' .env > .env.tmp && mv .env.tmp .env && \
 	echo -e "${GREEN}✅ Generated FERNET_KEY${NC}"
 
 	@postgres_password=$$(. venv/bin/activate && python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))" && deactivate) && \
-	sed -i "s|POSTGRES_PASSWORD=''|POSTGRES_PASSWORD='$$postgres_password'|g" .env && \
+	awk -v pass="$$postgres_password" 'BEGIN{FS=OFS="="} $$1=="POSTGRES_PASSWORD"{$$2="'\''" pass "'\''"}1' .env > .env.tmp && mv .env.tmp .env && \
 	echo -e "${GREEN}✅ Generated POSTGRES_PASSWORD${NC}"
 
 	@borg_passphrase=$$(. venv/bin/activate && python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))" && deactivate) && \
-	sed -i "s|BORG_PASSPHRASE=''|BORG_PASSPHRASE='$$borg_passphrase'|g" .env && \
+	awk -v pass="$$borg_passphrase" 'BEGIN{FS=OFS="="} $$1=="BORG_PASSPHRASE"{$$2="'\''" pass "'\''"}1' .env > .env.tmp && mv .env.tmp .env && \
 	echo -e "${GREEN}✅ Generated BORG_PASSPHRASE${NC}"
 
 	@echo -e "\n${YELLOW}👤 Please enter values for the following variables:${NC}"
@@ -216,7 +246,7 @@ setup-env:
 				echo -e "${YELLOW}🌍 Your IP information:${NC}"; \
 				echo "$$ip_info"; \
 			fi; \
-			sed -i "s|DOMAIN=''|DOMAIN='$$domain'|g" .env; \
+			awk -v domain="$$domain" 'BEGIN{FS=OFS="="} $$1=="DOMAIN"{$$2="'\''" domain "'\''"}1' .env > .env.tmp && mv .env.tmp .env; \
 			echo -e "${GREEN}✅ Domain set successfully!${NC}"; \
 			break; \
 		fi; \
@@ -227,7 +257,7 @@ setup-env:
 		if [[ ! "$$admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$$ ]]; then \
 			echo -e "${RED}❌ Error: Invalid email format. Please enter a valid email address.${NC}"; \
 		else \
-			sed -i "s|ADMIN_EMAIL=''|ADMIN_EMAIL='$$admin_email'|g" .env; \
+			awk -v email="$$admin_email" 'BEGIN{FS=OFS="="} $$1=="ADMIN_EMAIL"{$$2="'\''" email "'\''"}1' .env > .env.tmp && mv .env.tmp .env; \
 			echo -e "${GREEN}✅ Admin email set successfully!${NC}"; \
 			break; \
 		fi; \
@@ -245,14 +275,14 @@ setup-env:
 			status_code=$$(curl -s -o /dev/null -w "%{http_code}" --insecure "$$fedow_url"); \
 			if [[ "$$status_code" == "200" ]]; then \
 				echo -e "${GREEN}✅ FEDOW_URL is accessible (HTTP 200 OK)${NC}"; \
-				sed -i "s|FEDOW_URL=''|FEDOW_URL='$$fedow_url'|g" .env; \
+				awk -v url="$$fedow_url" 'BEGIN{FS=OFS="="} $$1=="FEDOW_URL"{$$2="'\''" url "'\''"}1' .env > .env.tmp && mv .env.tmp .env; \
 				echo -e "${GREEN}✅ FEDOW_URL set successfully!${NC}"; \
 				break; \
 			else \
 				echo -e "${YELLOW}⚠️ Warning: FEDOW_URL returned HTTP status $$status_code${NC}"; \
 				read -p "Continue anyway? (y/n): " continue_anyway; \
 				if [[ "$$continue_anyway" == "y" ]]; then \
-					sed -i "s|FEDOW_URL=''|FEDOW_URL='$$fedow_url'|g" .env; \
+					awk -v url="$$fedow_url" 'BEGIN{FS=OFS="="} $$1=="FEDOW_URL"{$$2="'\''" url "'\''"}1' .env > .env.tmp && mv .env.tmp .env; \
 					echo -e "${YELLOW}⚠️ FEDOW_URL set despite connection issues${NC}"; \
 					break; \
 				fi; \
@@ -272,14 +302,14 @@ setup-env:
 			status_code=$$(curl -s -o /dev/null -w "%{http_code}" --insecure "$$lespass_url"); \
 			if [[ "$$status_code" == "200" ]]; then \
 				echo -e "${GREEN}✅ LESPASS_TENANT_URL is accessible (HTTP 200 OK)${NC}"; \
-				sed -i "s|LESPASS_TENANT_URL=''|LESPASS_TENANT_URL='$$lespass_url'|g" .env; \
+				awk -v url="$$lespass_url" 'BEGIN{FS=OFS="="} $$1=="LESPASS_TENANT_URL"{$$2="'\''" url "'\''"}1' .env > .env.tmp && mv .env.tmp .env; \
 				echo -e "${GREEN}✅ LESPASS_TENANT_URL set successfully!${NC}"; \
 				break; \
 			else \
 				echo -e "${YELLOW}⚠️ Warning: LESPASS_TENANT_URL returned HTTP status $$status_code${NC}"; \
 				read -p "Continue anyway? (y/n): " continue_anyway; \
 				if [[ "$$continue_anyway" == "y" ]]; then \
-					sed -i "s|LESPASS_TENANT_URL=''|LESPASS_TENANT_URL='$$lespass_url'|g" .env; \
+					awk -v url="$$lespass_url" 'BEGIN{FS=OFS="="} $$1=="LESPASS_TENANT_URL"{$$2="'\''" url "'\''"}1' .env > .env.tmp && mv .env.tmp .env; \
 					echo -e "${YELLOW}⚠️ LESPASS_TENANT_URL set despite connection issues${NC}"; \
 					break; \
 				fi; \
@@ -288,10 +318,28 @@ setup-env:
 	done
 
 	@read -p "💰 MAIN_ASSET_NAME (e.g., TestCoin, FestivalCoin): " asset_name && \
-	sed -i "s|MAIN_ASSET_NAME=''|MAIN_ASSET_NAME='$$asset_name'|g" .env && \
+	awk -v name="$$asset_name" 'BEGIN{FS=OFS="="} $$1=="MAIN_ASSET_NAME"{$$2="'\''" name "'\''"}1' .env > .env.tmp && mv .env.tmp .env && \
 	echo -e "${GREEN}✅ MAIN_ASSET_NAME set successfully!${NC}"
 
 	@echo -e "\n${GREEN}🎉 .env file created and configured with your values!${NC}"
+
+
+# Check if Traefik container is running
+.PHONY: check-traefik
+check-traefik:
+	@echo -e "\n${YELLOW}🔍 Checking if Traefik container is running...${NC}"
+	@if docker ps --format '{{.Names}}' | grep -q "traefik"; then \
+		echo -e "${GREEN}✅ Traefik container is running!${NC}"; \
+		docker ps --filter "name=traefik" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"; \
+	else \
+		echo -e "${RED}❌ Traefik container is not running!${NC}"; \
+		echo -e "${YELLOW}ℹ️ Attempting to check if Traefik image exists...${NC}"; \
+		if docker images | grep -q "traefik"; then \
+			echo -e "${YELLOW}🔄 Traefik image exists but container is not running.${NC}"; \
+		else \
+			echo -e "${RED}❌ Failed to see Traefik container. .${NC}"; \
+		fi; \
+	fi
 
 
 # Verify LesPass connection
