@@ -63,22 +63,48 @@ update-upgrade:
 # Docker installation
 .PHONY: install-docker
 install-docker:
-	@echo -e "\n${YELLOW}🐳 Installing Docker...${NC}"
-	curl -fsSL https://get.docker.com -o get-docker.sh
-	sudo sh get-docker.sh
-	sudo usermod -aG docker $(USER)
-	rm get-docker.sh
-	sudo docker network create frontend
-	@echo -e "${GREEN}✅ Docker installation completed successfully!${NC}"
+	@echo -e "\n${YELLOW}🐳 Checking Docker installation...${NC}"
+	@if command -v docker >/dev/null 2>&1 && systemctl is-active --quiet docker 2>/dev/null; then \
+		echo -e "${GREEN}✅ Docker is already installed and running!${NC}"; \
+		# Ensure frontend network exists even if Docker was already installed \
+		if ! docker network ls | grep -q frontend; then \
+			echo -e "${YELLOW}🔄 Creating frontend network...${NC}"; \
+			sudo docker network create frontend; \
+			echo -e "${GREEN}✅ Frontend network created!${NC}"; \
+		else \
+			echo -e "${GREEN}✅ Frontend network already exists!${NC}"; \
+		fi; \
+	else \
+		echo -e "${YELLOW}🔄 Installing Docker...${NC}"; \
+		curl -fsSL https://get.docker.com -o get-docker.sh; \
+		sudo sh get-docker.sh; \
+		sudo usermod -aG docker $(USER); \
+		rm get-docker.sh; \
+		sudo docker network create frontend; \
+		echo -e "${GREEN}✅ Docker installation completed successfully!${NC}"; \
+	fi
 
 # CrowdSec installation
 .PHONY: install-crowdsec
 install-crowdsec:
-	@echo -e "\n${YELLOW}🛡️ Installing CrowdSec...${NC}"
-	curl -s https://install.crowdsec.net | sudo sh
-	sudo apt install -y crowdsec
-	sudo apt install -y crowdsec-firewall-bouncer-iptables
-	@echo -e "${GREEN}✅ CrowdSec installation completed successfully!${NC}"
+	@echo -e "\n${YELLOW}🛡️ Checking CrowdSec installation...${NC}"
+	@if command -v cscli >/dev/null 2>&1 && systemctl is-active --quiet crowdsec 2>/dev/null; then \
+		echo -e "${GREEN}✅ CrowdSec is already installed and running!${NC}"; \
+		# Check if bouncer is installed \
+		if systemctl is-active --quiet crowdsec-firewall-bouncer 2>/dev/null; then \
+			echo -e "${GREEN}✅ CrowdSec firewall bouncer is already installed and running!${NC}"; \
+		else \
+			echo -e "${YELLOW}🔄 Installing CrowdSec firewall bouncer...${NC}"; \
+			sudo apt install -y crowdsec-firewall-bouncer-iptables; \
+			echo -e "${GREEN}✅ CrowdSec firewall bouncer installed successfully!${NC}"; \
+		fi; \
+	else \
+		echo -e "${YELLOW}🔄 Installing CrowdSec...${NC}"; \
+		curl -s https://install.crowdsec.net | sudo sh; \
+		sudo apt install -y crowdsec; \
+		sudo apt install -y crowdsec-firewall-bouncer-iptables; \
+		echo -e "${GREEN}✅ CrowdSec installation completed successfully!${NC}"; \
+	fi
 
 # Check Python installation and install required libraries
 .PHONY: check-python
