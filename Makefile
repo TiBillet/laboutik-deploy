@@ -360,7 +360,6 @@ verify-lespass:
 		response=$$(curl -s -X POST \
 			-d "email=$$ADMIN_EMAIL" \
 			-H "Content-Type: application/x-www-form-urlencoded" \
-			--insecure \
 			"$$LESPASS_TENANT_URL"api/get_user_pub_pem/); \
 		if [ $$? -eq 0 ] && [ -n "$$response" ]; then \
 			echo "$$response"; \
