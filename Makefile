@@ -119,14 +119,28 @@ check-python:
 	fi
 
 	@echo -e "\n${YELLOW}📚 Setting up virtual environment for Python libraries...${NC}"
+	@# Check if python3-venv is installed
+	@if ! dpkg -l | grep -q python3-venv; then \
+		echo -e "${YELLOW}⚠️ python3-venv is not installed. Installing...${NC}"; \
+		sudo apt update && sudo apt install -y python3-venv; \
+	fi
+
 	@if [ ! -d "venv" ]; then \
 		echo -e "${YELLOW}🔧 Creating virtual environment...${NC}"; \
-		python3 -m venv venv; \
+		python3 -m venv venv || { echo -e "${RED}❌ Failed to create virtual environment. Please check your Python installation.${NC}"; exit 1; }; \
 	fi
 
 	@echo -e "${YELLOW}🔌 Activating virtual environment and installing packages...${NC}"
-	@. venv/bin/activate && pip install cryptography django && deactivate
-	@echo -e "${GREEN}✅ Python libraries installed in virtual environment${NC}"
+	@if [ -f "venv/bin/activate" ]; then \
+		. venv/bin/activate && pip install cryptography django && deactivate; \
+		echo -e "${GREEN}✅ Python libraries installed in virtual environment${NC}"; \
+	else \
+		echo -e "${RED}❌ Virtual environment activation file not found. Creating virtual environment again...${NC}"; \
+		rm -rf venv; \
+		python3 -m venv venv || { echo -e "${RED}❌ Failed to create virtual environment. Please check your Python installation.${NC}"; exit 1; }; \
+		. venv/bin/activate && pip install cryptography django && deactivate; \
+		echo -e "${GREEN}✅ Python libraries installed in virtual environment${NC}"; \
+	fi
 
 	@echo -e "\n${YELLOW}🔍 Checking for required system tools...${NC}"
 	@if ! command -v host >/dev/null 2>&1; then \
