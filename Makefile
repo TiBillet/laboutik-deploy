@@ -60,7 +60,7 @@ install: update-upgrade install-docker install-crowdsec check-swap setup-dirs ch
 update-upgrade:
 	@echo -e "\n${YELLOW}🔄 Starting VPS update && upgrade...${NC}"
 	sudo apt update && sudo apt upgrade -y
-	sudo apt install git byobu curl at
+	sudo apt install git byobu curl at make
 	@echo -e "${GREEN}✅ VPS update && upgrade completed successfully!${NC}"
 
 
@@ -381,7 +381,7 @@ verify-lespass:
 .PHONY: create-deploy-script
 create-deploy-script:
 	@echo -e "\n${YELLOW}📜 Creating deployment script for SSH updates...${NC}"
-	@echo -e "set -e\ncd /home/ubuntu/Laboutik/\ndocker compose pull\ndocker compose up -d" > update-laboutik.sh
-	@chmod +x update-laboutik.sh
+	@echo -e "set -e\ncd /home/ubuntu/Laboutik/\ndocker compose pull\ndocker compose up -d" > /home/ubuntu/update-laboutik.sh
+	@chmod +x /home/ubuntu/update-laboutik.sh
 	@echo -e "${GREEN}✅ Deployment script created successfully at update-laboutik.sh${NC}"
 	@echo -e "${YELLOW}ℹ️ You can now use this script for remote updates via SSH${NC}"
