@@ -43,6 +43,7 @@ help:
 # 	@echo -e "  ${GREEN}setup${NC}             - 🔧 Complete setup (directories and .env)"
 	@echo -e "  ${GREEN}verify-lespass${NC}    - 🔄 Verify connection with LesPass"
 	@echo -e "  ${GREEN}check-traefik${NC}     - 🔍 Verify Traefik container is running"
+	@echo -e "  ${GREEN}create-deploy-script${NC} - 📜 Create deployment script for SSH updates"
 # 	@echo -e "  ${GREEN}deploy${NC}            - 🚢 Deploy the application using Docker Compose"
 # 	@echo -e "  ${GREEN}dev${NC}               - 💻 Start development environment"
 # 	@echo -e "  ${GREEN}logs${NC}              - 📊 View logs from all services"
@@ -51,7 +52,7 @@ help:
 
 # VPS setup
 .PHONY: install
-install: update-upgrade install-docker install-crowdsec check-swap setup-dirs check-python setup-env verify-lespass check-traefik
+install: update-upgrade install-docker install-crowdsec check-swap setup-dirs check-python setup-env verify-lespass check-traefik create-deploy-script
 	@echo -e "\n${GREEN}🎉 VPS setup completed successfully!${NC}"
 
 # VPS update and upgrade
@@ -59,7 +60,7 @@ install: update-upgrade install-docker install-crowdsec check-swap setup-dirs ch
 update-upgrade:
 	@echo -e "\n${YELLOW}🔄 Starting VPS update && upgrade...${NC}"
 	sudo apt update && sudo apt upgrade -y
-	sudo apt install git byobu curl
+	sudo apt install git byobu curl at
 	@echo -e "${GREEN}✅ VPS update && upgrade completed successfully!${NC}"
 
 
@@ -375,3 +376,12 @@ verify-lespass:
 		echo -e "${RED}❌ Failed to connect to LesPass after $$max_attempts attempts.${NC}"; \
 		exit 1; \
 	fi
+
+# Create deployment script for SSH updates
+.PHONY: create-deploy-script
+create-deploy-script:
+	@echo -e "\n${YELLOW}📜 Creating deployment script for SSH updates...${NC}"
+	@echo -e "set -e\ncd /home/ubuntu/Laboutik/\ndocker compose pull\ndocker compose up -d" > update-laboutik.sh
+	@chmod +x update-laboutik.sh
+	@echo -e "${GREEN}✅ Deployment script created successfully at update-laboutik.sh${NC}"
+	@echo -e "${YELLOW}ℹ️ You can now use this script for remote updates via SSH${NC}"
