@@ -99,14 +99,30 @@ install-crowdsec:
 			echo -e "${GREEN}✅ CrowdSec firewall bouncer is already installed and running!${NC}"; \
 		else \
 			echo -e "${YELLOW}🔄 Installing CrowdSec firewall bouncer...${NC}"; \
-			sudo apt install -y crowdsec-firewall-bouncer-iptables; \
+			# Detect if system uses nftables or iptables \
+			echo -e "${YELLOW}🔍 Detecting firewall system (iptables or nftables)...${NC}"; \
+			if iptables -V 2>/dev/null | grep -q "nf_tables"; then \
+				echo -e "${YELLOW}📋 Detected nftables - installing crowdsec-firewall-bouncer-nftables${NC}"; \
+				sudo apt install -y crowdsec-firewall-bouncer-nftables; \
+			else \
+				echo -e "${YELLOW}📋 Detected iptables - installing crowdsec-firewall-bouncer-iptables${NC}"; \
+				sudo apt install -y crowdsec-firewall-bouncer-iptables; \
+			fi; \
 			echo -e "${GREEN}✅ CrowdSec firewall bouncer installed successfully!${NC}"; \
 		fi; \
 	else \
 		echo -e "${YELLOW}🔄 Installing CrowdSec...${NC}"; \
 		curl -s https://install.crowdsec.net | sudo sh; \
 		sudo apt install -y crowdsec; \
-		sudo apt install -y crowdsec-firewall-bouncer-iptables; \
+		# Detect if system uses nftables or iptables \
+		echo -e "${YELLOW}🔍 Detecting firewall system (iptables or nftables)...${NC}"; \
+		if iptables -V 2>/dev/null | grep -q "nf_tables"; then \
+			echo -e "${YELLOW}📋 Detected nftables - installing crowdsec-firewall-bouncer-nftables${NC}"; \
+			sudo apt install -y crowdsec-firewall-bouncer-nftables; \
+		else \
+			echo -e "${YELLOW}📋 Detected iptables - installing crowdsec-firewall-bouncer-iptables${NC}"; \
+			sudo apt install -y crowdsec-firewall-bouncer-iptables; \
+		fi; \
 		echo -e "${GREEN}✅ CrowdSec installation completed successfully!${NC}"; \
 	fi
 
