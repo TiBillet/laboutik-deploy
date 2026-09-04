@@ -203,6 +203,18 @@ fi
 # Reaffiche tant qu'il n'a pas ete acquitte. Sans ces elements, les archives
 # sont un bloc chiffre illisible : c'est le seul maillon que la sauvegarde ne
 # peut pas se sauvegarder elle-meme.
+# `borg key export DEPOT` sans chemin n'ecrit sur stdout qu'a partir de borg
+# 1.2. Le conteneur tourne sur Debian bullseye, donc borg 1.1.16, ou le chemin
+# est OBLIGATOIRE : sans lui, "output file to export key to expected". On exporte
+# donc vers un fichier temporaire DANS le conteneur, on l'affiche, on l'efface —
+# ca marche sur les deux versions, et la cle ne touche jamais le disque de
+# l'hote.
+exporter_cle() {
+  local f="/tmp/borg-key-$$.txt"
+  borg_conteneur key export "$BORG_REPO" "$f" >/dev/null || return 1
+  docker compose exec -T "$SERVICE" sh -c "cat '$f'; rm -f '$f'"
+}
+
 coffre_fort() {
   [ -f "$TEMOIN_COFFRE" ] && return 0
 
@@ -221,7 +233,13 @@ coffre_fort() {
   echo
   echo "Cle du depot (borg key export) :"
   echo "----------------------------------------------------------------"
-  borg_conteneur key export "$BORG_REPO"
+  exporter_cle || {
+    echo "  (export indisponible — voir le message ci-dessus)"
+    echo
+    echo "  Ce n'est pas bloquant : le depot est en repokey-blake2, la cle est"
+    echo "  DANS le depot. L'adresse et la passphrase ci-dessus suffisent a"
+    echo "  restaurer. La cle exportee n'est qu'une ceinture supplementaire."
+  }
   echo "----------------------------------------------------------------"
   echo
   echo "ET AUSSI, indispensables le jour ou ce serveur n'existe plus :"
