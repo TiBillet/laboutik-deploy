@@ -4,8 +4,8 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7eee87d1-5849-4d03-ae35-e59ca65a8ef8" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="7eee87d1-5849-4d03-ae35-e59ca65a8ef8" name="Changes" comment="Handle borg key export compatibility between versions&#10;&#10;Introduced `exporter_cle` function in `backup.sh` to ensure compatibility with borg versions 1.1.x and 1.2.x during key export. Implements a temporary file strategy within the container to securely display and clean up exported keys.">
+      <change beforePath="$PROJECT_DIR$/BACKUP.md" beforeDir="false" afterPath="$PROJECT_DIR$/BACKUP.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/backup.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -38,22 +38,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/jonas/TiBillet/dev/laboutik-deploy&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "main",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "/home/jonas/TiBillet/dev/laboutik-deploy",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "to.speed.mode.migration.done": "true"
   }
-}</component>
+}]]></component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -70,10 +74,24 @@
       <option name="presentableId" value="Default" />
       <updated>1788524530591</updated>
       <workItem from="1788524531668" duration="17000" />
+      <workItem from="1788525743377" duration="799000" />
     </task>
+    <task id="LOCAL-00001" summary="Handle borg key export compatibility between versions&#10;&#10;Introduced `exporter_cle` function in `backup.sh` to ensure compatibility with borg versions 1.1.x and 1.2.x during key export. Implements a temporary file strategy within the container to securely display and clean up exported keys.">
+      <option name="closed" value="true" />
+      <created>1788525749053</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1788525749053</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Handle borg key export compatibility between versions&#10;&#10;Introduced `exporter_cle` function in `backup.sh` to ensure compatibility with borg versions 1.1.x and 1.2.x during key export. Implements a temporary file strategy within the container to securely display and clean up exported keys." />
+    <option name="LAST_COMMIT_MESSAGE" value="Handle borg key export compatibility between versions&#10;&#10;Introduced `exporter_cle` function in `backup.sh` to ensure compatibility with borg versions 1.1.x and 1.2.x during key export. Implements a temporary file strategy within the container to securely display and clean up exported keys." />
   </component>
 </project>

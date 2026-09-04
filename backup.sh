@@ -346,8 +346,17 @@ env_cron_a_jour() {
 recreer_conteneur() {
   echo
   dire "Le conteneur $SERVICE doit etre recree pour que le cron reprenne la"
-  dire "nouvelle configuration. L'application sera coupee 30 a 60 s (migrations,"
-  dire "collectstatic, gunicorn/daphne/celery) : LES TPE SERONT HORS LIGNE."
+  dire "nouvelle configuration."
+  echo
+  dire "TOUTE L'APPLICATION SERA COUPEE 30 A 60 s, le temps des migrations et du"
+  dire "collectstatic. Supervisor pilote dans ce conteneur :"
+  dire "  - gunicorn (8000) : interfaces de vente, admin, kiosk"
+  dire "  - daphne   (8001) : tous les websockets"
+  dire "  - celery / celerybeat : les taches de fond"
+  echo
+  dire "SURTOUT : PAS PENDANT QU'UNE CARTE EST PRESENTEE SUR LE TPE. La tache"
+  dire "celery qui surveille l'intention de paiement Stripe (htmxview/tasks.py)"
+  dire "serait tuee en plein vol, et le paiement resterait en suspens."
   # Defaut volontairement "non" : c'est la seule question du script qui coupe la
   # production, elle ne doit pas pouvoir repondre oui toute seule sur une Entree
   # ou un Ctrl-D.
@@ -363,17 +372,28 @@ recreer_conteneur() {
   # recree peut avoir une autre IP : sans ce restart, nginx rend des 502.
   docker compose restart "$SERVICE_NGINX"
 
-  # On attend que l'application REPONDE, pas seulement que le fichier existe :
+  # On attend que l'application soit prete, pas seulement que le fichier existe :
   # start_services.sh ecrit .env_for_cron_backup dans la premiere seconde, mais
   # lance ensuite migrate et collectstatic. Lancer pg_dumpall pendant les
   # migrations donnerait au mieux un dump qui attend des verrous, au pire un
-  # dump rate sur une table supprimee en cours de route. gunicorn n'ecoute
-  # qu'apres les migrations : c'est donc le bon signal.
-  dire "attente de la fin des migrations (gunicorn doit repondre)..."
+  # dump rate sur une table supprimee en cours de route. supervisor ne demarre
+  # gunicorn qu'apres les migrations : le port 8000 qui s'ouvre est le signal.
+  #
+  # On presente le DOMAIN du .env comme en-tete Host. En production,
+  # Cashless/settings.py fait  ALLOWED_HOSTS = [DOMAIN]  : une requete sur
+  # http://localhost:8000/ est REJETEE, journalisee en ERROR par
+  # django.security.DisallowedHost, et remonte dans Sentry a chaque recreation
+  # de conteneur. Avec le bon Host, la requete est legitime — et elle prouve que
+  # Django SERT, pas seulement que la socket de gunicorn est ouverte.
+  #
+  # On se connecte sur 127.0.0.1 et non sur le domaine : on veut savoir si
+  # l'application est prete, pas si le DNS public et Traefik repondent.
+  dire "attente de la fin des migrations (Django doit repondre)..."
   local i=0
-  until docker compose exec -T "$SERVICE" curl -s -o /dev/null http://localhost:8000/ 2>/dev/null; do
+  until docker compose exec -T "$SERVICE" \
+          curl -s -o /dev/null -H "Host: $DOMAIN" http://127.0.0.1:8000/ 2>/dev/null; do
     i=$((i + 1))
-    [ "$i" -lt 90 ] || erreur "l'application ne repond toujours pas.
+    [ "$i" -lt 90 ] || erreur "Django ne repond toujours pas sur le port 8000 apres 3 min.
          Regarde :  docker compose logs $SERVICE"
     sleep 2
   done

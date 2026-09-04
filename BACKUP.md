@@ -119,9 +119,24 @@ est *non*). C'est nécessaire : `.env_for_cron_backup`, le fichier que lit le
 cron, est écrit au démarrage du conteneur à partir de son environnement —
 écrire dans le `.env` ne suffit pas.
 
-**L'application est coupée 30 à 60 secondes** (migrations, `collectstatic`,
-redémarrage de gunicorn/daphne/celery). **Les TPE seront hors ligne pendant ce
-temps.** Ne lance pas la première mise en place pendant un événement.
+**Toute l'application est coupée 30 à 60 secondes**, le temps des migrations et
+du `collectstatic`. Supervisor pilote trois choses dans ce conteneur, et elles
+tombent ensemble :
+
+| | |
+|---|---|
+| **gunicorn** (8000) | interfaces de vente, admin, kiosk |
+| **daphne** (8001) | tous les websockets |
+| **celery / celerybeat** | les tâches de fond |
+
+> ⚠️ **Ne recrée jamais le conteneur pendant qu'une carte est présentée sur le
+> TPE.** La tâche celery qui surveille l'intention de paiement Stripe
+> (`htmxview/tasks.py`, une vérification par seconde) serait tuée en plein vol et
+> le paiement resterait en suspens — c'est exactement la panne que traite
+> l'entrée 3 du CHANGELOG de LaBoutik, « plus jamais d'écran *Annulé* sans
+> annulation réelle ».
+
+Plus généralement : évite un événement en cours.
 
 Le conteneur est recréé avec `--no-deps`, donc sans toucher à la base. En
 contrepartie, le prochain `docker compose up -d` complet (celui de
