@@ -44,6 +44,8 @@ help:
 	@echo -e "  ${GREEN}verify-lespass${NC}    - 🔄 Verify connection with LesPass"
 	@echo -e "  ${GREEN}check-traefik${NC}     - 🔍 Verify Traefik container is running"
 	@echo -e "  ${GREEN}create-deploy-script${NC} - 📜 Create deployment script for SSH updates"
+	@echo -e "  ${GREEN}backup${NC}            - 💾 Set up the borgwarehouse backup, then run one"
+	@echo -e "                          (stack must be up: docker compose up -d)"
 # 	@echo -e "  ${GREEN}deploy${NC}            - 🚢 Deploy the application using Docker Compose"
 # 	@echo -e "  ${GREEN}dev${NC}               - 💻 Start development environment"
 # 	@echo -e "  ${GREEN}logs${NC}              - 📊 View logs from all services"
@@ -214,6 +216,9 @@ setup-env:
 	@if [ -f .env ]; then \
 		echo -e "${YELLOW}⚠️ .env file already exists. Backing up to .env.bak${NC}"; \
 		cp .env .env.bak; \
+		grep -E "^[[:space:]]*(export[[:space:]]+)?BORG_(REPO|PASSPHRASE)[[:space:]]*=" .env > .env.borg || true; \
+	else \
+		rm -f .env.borg; \
 	fi
 	@cp .env.template .env
 
@@ -236,9 +241,31 @@ setup-env:
 	awk -v pass="$$postgres_password" 'BEGIN{FS=OFS="="} $$1=="POSTGRES_PASSWORD"{$$2="'\''" pass "'\''"}1' .env > .env.tmp && mv .env.tmp .env && \
 	echo -e "${GREEN}✅ Generated POSTGRES_PASSWORD${NC}"
 
-	@borg_passphrase=$$(. venv/bin/activate && python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode('utf-8'))" && deactivate) && \
-	awk -v pass="$$borg_passphrase" 'BEGIN{FS=OFS="="} $$1=="BORG_PASSPHRASE"{$$2="'\''" pass "'\''"}1' .env > .env.tmp && mv .env.tmp .env && \
-	echo -e "${GREEN}✅ Generated BORG_PASSPHRASE${NC}"
+	@# BORG_PASSPHRASE n'est PLUS generee ici : elle appartient a `make backup`.
+	@# Une passphrase regeneree sur une instance qui sauvegarde deja rendrait
+	@# toutes ses archives borg definitivement illisibles, sans un mot.
+	@#
+	@# Les lignes BORG_* sont RECOPIEES VERBATIM depuis l'ancien .env (capture
+	@# plus haut). Pas de sed sur la valeur : un '&' ou un '|' dans une
+	@# passphrase la corromprait, ou la viderait, en affichant quand meme un
+	@# message de succes.
+	@if [ -s .env.borg ]; then \
+		sed -i "/^[[:space:]]*\(export[[:space:]]\+\)\?BORG_\(REPO\|PASSPHRASE\)[[:space:]]*=/d" .env; \
+		cat .env.borg >> .env; \
+		while IFS= read -r ligne; do \
+			grep -qxF "$$ligne" .env || { echo -e "${RED}❌ La reprise de la config de sauvegarde a echoue. L'ancien .env est dans .env.bak${NC}"; exit 1; }; \
+		done < .env.borg; \
+		rm -f .env.borg; \
+		echo -e "${GREEN}✅ Backup config (BORG_REPO / BORG_PASSPHRASE) kept from the previous .env${NC}"; \
+	else \
+		rm -f .env.borg; \
+		echo -e "${YELLOW}ℹ No backup configured yet. Set it up with: make backup${NC}"; \
+	fi
+
+	@# Le .env contient POSTGRES_PASSWORD et la passphrase borg : la copie du
+	@# template arrive en 664, il ne faut pas l'y laisser.
+	@chmod 600 .env
+	@[ ! -f .env.bak ] || chmod 600 .env.bak
 
 	@echo -e "\n${YELLOW}👤 Please enter values for the following variables:${NC}"
 	@while true; do \
@@ -401,3 +428,14 @@ create-deploy-script:
 	@chmod +x /home/ubuntu/update-laboutik.sh
 	@echo -e "${GREEN}✅ Deployment script created successfully at update-laboutik.sh${NC}"
 	@echo -e "${YELLOW}ℹ️ You can now use this script for remote updates via SSH${NC}"
+
+# Backup borgwarehouse
+# Une seule porte d'entree, idempotente : si la sauvegarde n'est pas configuree,
+# elle la met en place ; si elle l'est deja, elle lance simplement une
+# sauvegarde. Toute la logique vit dans backup.sh.
+#
+# Volontairement HORS de la chaine `install` : la stack doit tourner
+# (docker compose up -d) pour que le dump et le borg init soient possibles.
+.PHONY: backup
+backup:
+	@bash backup.sh

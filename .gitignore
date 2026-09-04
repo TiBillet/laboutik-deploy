@@ -1,1 +1,20 @@
 .idea
+
+# Secrets : mot de passe postgres, cle Fernet, passphrase du depot borg.
+# Motif large volontaire : les copies ad hoc (.env.bak, .env.avant-backup,
+# .env.save, .env.2) contiennent les memes secrets et echapperaient a une liste.
+.env*
+!.env.template
+
+# Cle privee SSH du depot borgwarehouse, known_hosts
+ssh/
+
+# Venv local du Makefile (generation des cles)
+venv/
+
+# Donnees de production, creees par docker et par l'application
+database/
+backup/
+logs/
+www/
+nginx/
